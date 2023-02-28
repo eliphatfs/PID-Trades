@@ -25,7 +25,8 @@ def trades_pi_fgsm(args):
     pitrades = PITradesTrainLoss()
     return MethodDesc(pitrades, [
         Trades(),
-        Beta(pitrades)
+        Beta(pitrades),
+        CR()
     ], [TradesProcessor(args.eps, 1, 1.25)])
 
 
@@ -77,9 +78,12 @@ class TradesProcessor(rst.Processor):
             x_adv = torch.clamp(x_adv, 0.0, 1.0)
         model.train(old_training)
         x_adv = x_adv.detach()
-        loss_robust = (1. / len(x_natural)) * self.criterion_kl(F.log_softmax(model(x_adv), dim=1),
-                                                                F.softmax(model(x_natural), dim=1))
+        adv_pred = model(x_adv)
+        nat_pred = model_return.logits
+        loss_robust = (1. / len(x_natural)) * self.criterion_kl(F.log_softmax(adv_pred, dim=1),
+                                                                F.softmax(nat_pred, dim=1))
         model_return.trades = loss_robust
+        model_return.cr = (adv_pred.argmax(1) == nat_pred.argmax(1)).float().mean()
         return model_return
 
 
@@ -117,6 +121,11 @@ class Trades(rst.Metric):
         return model_return.trades
 
 
+class CR(rst.Metric):
+    def __call__(self, inputs, model_return) -> torch.Tensor:
+        return model_return.cr
+
+
 class TradesTrainLoss(rst.Loss):
     def __init__(self, beta) -> None:
         super().__init__()
@@ -135,7 +144,7 @@ class PIControl(object):
     def _Kp_fun(self, err, scale=1):
         return 1.0 / (1.0 + float(scale) * math.exp(err))
 
-    def __call__(self, target, current, Kp=-0.5, Ki=0):
+    def __call__(self, target, current, Kp=0.5, Ki=0.0):
         error_k = target - current
         # compute U as the control factor
         Pk = Kp * error_k
@@ -159,7 +168,7 @@ class PILoss(rst.Loss):
     def __init__(self) -> None:
         super().__init__()
         self.beta = 10.0
-        self.target_v = 0.1
+        self.target_v = 0.6
         self.beta_min = 0.01
         self.pid = PIControl(self.beta, self.beta_min)
         self.momentum = 0.8
@@ -183,6 +192,9 @@ class PILoss(rst.Loss):
 class PITradesTrainLoss(PILoss):
     def target(self, metrics):
         return metrics.trades
+
+    def control(self, metrics):
+        return metrics.cr
 
 
 class PIRobustAccLoss(PILoss):
