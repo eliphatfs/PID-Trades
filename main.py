@@ -22,6 +22,7 @@ methods = {
     'pifgsm': dyntrades.methods.pi_fgsm,
     'pipgd': dyntrades.methods.pi_pgd,
     'pgd': dyntrades.methods.pgd,
+    'pitrades': dyntrades.methods.trades_pi_pgd,
 }
 
 

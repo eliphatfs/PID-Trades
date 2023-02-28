@@ -30,6 +30,15 @@ def trades_pi_fgsm(args):
     ], [TradesProcessor(args.eps, 1, 1.25)])
 
 
+def trades_pi_pgd(args):
+    pitrades = PITradesTrainLoss()
+    return MethodDesc(pitrades, [
+        Trades(),
+        Beta(pitrades),
+        CR()
+    ], [TradesProcessor(args.eps, 7, 0.25)])
+
+
 def pi_fgsm(args):
     piracc = PIRobustAccLoss()
     return MethodDesc(piracc, [
@@ -168,7 +177,7 @@ class PILoss(rst.Loss):
     def __init__(self) -> None:
         super().__init__()
         self.beta = 10.0
-        self.target_v = 0.6
+        self.target_v = 0.75
         self.beta_min = 0.01
         self.pid = PIControl(self.beta, self.beta_min)
         self.momentum = 0.8
