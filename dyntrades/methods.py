@@ -14,11 +14,11 @@ def natural(_):
 
 
 def trades_fgsm(args):
-    return MethodDesc(TradesTrainLoss(args.beta), [Trades()], [TradesProcessor(args.eps, 1, 1.25)])
+    return MethodDesc(TradesTrainLoss(args.beta), [Trades(), CR()], [TradesProcessor(args.eps, 1, 1.25)])
 
 
 def trades_pgd(args):
-    return MethodDesc(TradesTrainLoss(args.beta), [Trades()], [TradesProcessor(args.eps, 7, 0.25)])
+    return MethodDesc(TradesTrainLoss(args.beta), [Trades(), CR()], [TradesProcessor(args.eps, 7, 0.25)])
 
 
 def trades_pi_fgsm(args):
