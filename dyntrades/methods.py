@@ -177,7 +177,7 @@ class PILoss(rst.Loss):
     def __init__(self) -> None:
         super().__init__()
         self.beta = 10.0
-        self.target_v = 0.75
+        self.target_v = 0.8
         self.beta_min = 0.01
         self.pid = PIControl(self.beta, self.beta_min)
         self.momentum = 0.8
