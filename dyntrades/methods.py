@@ -44,7 +44,7 @@ def pi_fgsm(args):
     return MethodDesc(piracc, [
         rst.CategoricalAcc().redstone('RAcc', 'adv_logits'),
         nn.CrossEntropyLoss().redstone('RLoss', 'adv_logits'),
-        Beta(piracc)
+        Beta(piracc), CR()
     ], [PostATProcessor(args.eps, 1, 1.25)])
 
 
@@ -53,12 +53,24 @@ def pi_pgd(args):
     return MethodDesc(piracc, [
         rst.CategoricalAcc().redstone('RAcc', 'adv_logits'),
         nn.CrossEntropyLoss().redstone('RLoss', 'adv_logits'),
-        Beta(piracc)
-    ], [PostATProcessor(args.eps, 7, 0.5)])
+        Beta(piracc), CR()
+    ], [PostATProcessor(args.eps, 7, 0.4)])
 
 
 def pgd(args):
-    return MethodDesc(None, [], [rst.AdvTrainingPGD(nn.CrossEntropyLoss().redstone(), [], args.eps, 0.5, 7)])
+    return MethodDesc(PGDLoss(), [
+        rst.CategoricalAcc().redstone('RAcc', 'adv_logits'),
+        nn.CrossEntropyLoss().redstone('RLoss', 'adv_logits'),
+        CR()
+    ], [PostATProcessor(args.eps, 7, 0.4)])
+
+
+def fgsm(args):
+    return MethodDesc(PGDLoss(), [
+        rst.CategoricalAcc().redstone('RAcc', 'adv_logits'),
+        nn.CrossEntropyLoss().redstone('RLoss', 'adv_logits'),
+        CR()
+    ], [PostATProcessor(args.eps, 1, 1.25)])
 
 
 class TradesProcessor(rst.Processor):
@@ -122,6 +134,7 @@ class PostATProcessor(rst.Processor):
         model.train(old_training)
         x_adv = x_adv.detach()
         model_return.adv_logits = model(x_adv)
+        model_return.cr = (model_return.adv_logits.argmax(1) == model_return.logits.argmax(1)).float().mean()
         return model_return
 
 
@@ -212,6 +225,11 @@ class PIRobustAccLoss(PILoss):
 
     def control(self, metrics):
         return metrics.racc
+
+
+class PGDLoss(rst.Loss):
+    def __call__(self, inputs, model_return, metrics) -> torch.Tensor:
+        return metrics.rloss
 
 
 class Beta(rst.Metric):
