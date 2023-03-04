@@ -158,22 +158,23 @@ class TradesTrainLoss(rst.Loss):
 
 
 class PIControl(object):
-    def __init__(self, init, vmin):
+    def __init__(self, init, vmin, vmax):
         self.I_k1 = 0.0
         self.W_k1 = init
         self.vmin = vmin
+        self.vmax = vmax
 
     def _Kp_fun(self, err, scale=1):
         return 1.0 / (1.0 + float(scale) * math.exp(err))
 
-    def __call__(self, target, current, Kp=0.5, Ki=0.0):
+    def __call__(self, target, current, Kp=-0.5, Ki=0.0):
         error_k = target - current
         # compute U as the control factor
         Pk = Kp * error_k
         Ik = self.I_k1 + Ki * error_k
 
         # wind-up for integrator
-        if self.W_k1 < self.vmin:
+        if self.W_k1 < self.vmin or self.W_k1 > self.vmax:
             Ik = self.I_k1
         Wk = Pk + Ik + self.W_k1
         self.W_k1 = Wk
@@ -182,6 +183,9 @@ class PIControl(object):
         # clamp min
         if Wk < self.vmin:
             Wk = self.vmin
+        # clamp max
+        if Wk > self.vmax:
+            Wk = self.vmax
         
         return Wk, error_k
 
@@ -190,12 +194,15 @@ class PILoss(rst.Loss):
     def __init__(self) -> None:
         super().__init__()
         self.beta = 10.0
-        self.target_v = 0.8
+        self.target_v = 0.07
         self.beta_min = 0.01
-        self.pid = PIControl(self.beta, self.beta_min)
+        self.beta_max = 20.0
+        self.pid = PIControl(self.beta, self.beta_min, self.beta_max)
         self.momentum = 0.8
         self.ema = 0.0
         self.emw = 0.0
+        self.tw = 1.0
+        self.tw = None
 
     def target(self, metrics):
         raise NotImplementedError
@@ -208,7 +215,10 @@ class PILoss(rst.Loss):
         self.ema = self.ema * self.momentum + trades * (1 - self.momentum)
         self.emw = self.emw * self.momentum + (1 - self.momentum)
         self.beta, _ = self.pid(self.target_v, self.ema / self.emw)
-        return metrics.loss + self.beta * self.target(metrics)
+        loss = metrics.loss + self.beta * self.target(metrics)
+        if self.tw is not None:
+            loss = loss / (self.beta + 1) * self.tw
+        return loss
 
 
 class PITradesTrainLoss(PILoss):
@@ -216,7 +226,7 @@ class PITradesTrainLoss(PILoss):
         return metrics.trades
 
     def control(self, metrics):
-        return metrics.cr
+        return metrics.trades
 
 
 class PIRobustAccLoss(PILoss):
@@ -224,7 +234,7 @@ class PIRobustAccLoss(PILoss):
         return metrics.rloss
 
     def control(self, metrics):
-        return metrics.racc
+        return metrics.racc / metrics.acc
 
 
 class PGDLoss(rst.Loss):
