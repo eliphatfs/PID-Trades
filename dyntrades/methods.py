@@ -39,6 +39,14 @@ def trades_pi_pgd(args):
     ], [TradesProcessor(args.eps, 7, 0.25)])
 
 
+def trades_cyc_pgd(args):
+    pitrades = CyclicalTradesLoss(0.02, 5.0, 1400)
+    return MethodDesc(pitrades, [
+        Trades(),
+        Beta(pitrades)
+    ], [TradesProcessor(args.eps, 7, 0.25)])
+
+
 def pi_fgsm(args):
     piracc = PIRobustAccLoss()
     return MethodDesc(piracc, [
@@ -154,6 +162,24 @@ class TradesTrainLoss(rst.Loss):
         self.beta = beta
 
     def __call__(self, inputs, model_return, metrics) -> torch.Tensor:
+        return metrics.loss + self.beta * metrics.trades
+
+
+class CyclicalTradesLoss(rst.Loss):
+    def __init__(self, beta_min, beta_max, steps) -> None:
+        super().__init__()
+        self.beta = self.beta_min = beta_min
+        self.beta_max = beta_max
+        self.steps = steps
+        self.i = 0
+
+    def __call__(self, inputs, model_return, metrics) -> torch.Tensor:
+        self.i += 1
+        stage = self.i % self.steps
+        if stage < self.steps // 2:
+            self.beta = self.beta_min + (self.beta_max - self.beta_min) * stage / (self.steps // 2)
+        else:
+            self.beta = self.beta_max
         return metrics.loss + self.beta * metrics.trades
 
 
